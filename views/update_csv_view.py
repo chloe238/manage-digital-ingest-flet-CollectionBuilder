@@ -256,21 +256,56 @@ class UpdateCSVView(BaseView):
                             self.logger.info(f"Generated URLs - obj: {obj_url}, small: {small_url}, thumb: {thumb_url}")
                             
                             # Update the three URL columns
+                            # For subset processing: only update if the URLs are empty or contain the old filename pattern
+                            # This prevents accidentally clearing URLs when processing subsets of files
                             if 'object_location' in self.csv_data.columns:
-                                self.csv_data.at[row_idx, 'object_location'] = obj_url
-                                self.logger.info(f"Set object_location at row {row_idx}")
+                                existing_obj_url = str(self.csv_data.at[row_idx, 'object_location']).strip()
+                                should_update = (
+                                    not existing_obj_url or 
+                                    existing_obj_url == 'nan' or 
+                                    existing_obj_url == '' or
+                                    csv_filename in existing_obj_url  # Update if URL contains the current filename
+                                )
+                                
+                                if should_update:
+                                    self.csv_data.at[row_idx, 'object_location'] = obj_url
+                                    self.logger.info(f"Updated object_location at row {row_idx}: {obj_url}")
+                                else:
+                                    self.logger.info(f"Preserved existing object_location at row {row_idx}: {existing_obj_url}")
                             else:
                                 self.logger.warning("object_location column not found in CSV!")
                                 
                             if 'image_small' in self.csv_data.columns:
-                                self.csv_data.at[row_idx, 'image_small'] = small_url
-                                self.logger.info(f"Set image_small at row {row_idx}")
+                                existing_small_url = str(self.csv_data.at[row_idx, 'image_small']).strip()
+                                should_update = (
+                                    not existing_small_url or 
+                                    existing_small_url == 'nan' or 
+                                    existing_small_url == '' or
+                                    csv_filename in existing_small_url  # Update if URL contains the current filename
+                                )
+                                
+                                if should_update:
+                                    self.csv_data.at[row_idx, 'image_small'] = small_url
+                                    self.logger.info(f"Updated image_small at row {row_idx}: {small_url}")
+                                else:
+                                    self.logger.info(f"Preserved existing image_small at row {row_idx}: {existing_small_url}")
                             else:
                                 self.logger.warning("image_small column not found in CSV!")
                                 
                             if 'image_thumb' in self.csv_data.columns:
-                                self.csv_data.at[row_idx, 'image_thumb'] = thumb_url
-                                self.logger.info(f"Set image_thumb at row {row_idx}")
+                                existing_thumb_url = str(self.csv_data.at[row_idx, 'image_thumb']).strip()
+                                should_update = (
+                                    not existing_thumb_url or 
+                                    existing_thumb_url == 'nan' or 
+                                    existing_thumb_url == '' or
+                                    csv_filename in existing_thumb_url  # Update if URL contains the current filename
+                                )
+                                
+                                if should_update:
+                                    self.csv_data.at[row_idx, 'image_thumb'] = thumb_url
+                                    self.logger.info(f"Updated image_thumb at row {row_idx}: {thumb_url}")
+                                else:
+                                    self.logger.info(f"Preserved existing image_thumb at row {row_idx}: {existing_thumb_url}")
                             else:
                                 self.logger.warning("image_thumb column not found in CSV!")
                             

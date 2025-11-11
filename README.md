@@ -76,6 +76,46 @@ The app automatically sets the mode to "CollectionBuilder" - no mode selection n
 - **Parent/Child Changes**: See `PARENT-CHILD-CHANGES.md` for details on parent/child object processing
 - **Development History**: See `HISTORY.md` for feature development timeline
 
+## 🛡️ Subset Processing Safeguard
+
+**Important: Existing Azure URLs are Protected**
+
+When processing a subset of files through MDI, the application now includes intelligent safeguards to prevent accidental data loss:
+
+### How It Works
+
+The Update CSV function uses **smart URL preservation logic** when updating Azure blob URLs (`object_location`, `image_small`, `image_thumb`):
+
+**URLs are Updated when:**
+- ✅ The field is empty or contains no data
+- ✅ The existing URL contains the filename you're currently processing
+- ✅ The field contains `NaN` or an empty string
+
+**URLs are Preserved when:**
+- 🔒 The existing URL contains a different filename (not in current batch)
+- 🔒 Files from previous processing runs maintain their URLs
+- 🔒 Non-matching rows keep their existing Azure links intact
+
+### Example Scenario
+
+```
+Your CSV has 100 rows with Azure URLs from previous processing.
+You select 5 new images to process.
+
+Result:
+- The 5 matching rows get updated with new Azure URLs ✅
+- The other 95 rows keep their existing Azure URLs unchanged 🔒
+```
+
+### Benefits
+
+- **Safe Subset Processing**: Process files in batches without losing previous work
+- **No Accidental Deletions**: Existing Azure URLs won't be cleared
+- **Flexible Workflows**: Update specific files while preserving the rest
+- **Detailed Logging**: Check `mdi.log` to see which URLs were updated vs. preserved
+
+This safeguard ensures you can confidently work with subsets of your collection without accidentally clearing metadata from files not included in the current processing batch.
+
 ## 🏢 About
 
 Developed for Grinnell College Libraries to streamline the digital object ingest process for CollectionBuilder static sites.
