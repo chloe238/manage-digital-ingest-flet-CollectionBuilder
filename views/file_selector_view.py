@@ -822,6 +822,13 @@ class CSVSelectorView(FileSelectorView):
         current_selected_column = self.page.session.get("selected_csv_column")
         current_csv_error = self.page.session.get("csv_read_error")
         search_directory = self.page.session.get("search_directory")
+        search_directories = self.page.session.get("search_directories") or []
+        
+        # Migrate old single directory to list format if needed
+        if search_directory and not search_directories:
+            search_directories = [search_directory]
+            self.page.session.set("search_directories", search_directories)
+        
         csv_validation_passed = self.page.session.get("csv_validation_passed")
         csv_validation_error = self.page.session.get("csv_validation_error")
         csv_unmatched_headings = self.page.session.get("csv_unmatched_headings") or []
@@ -1048,17 +1055,53 @@ class CSVSelectorView(FileSelectorView):
                 display_original_count = extracted_filename_count
                 display_matched_count = len([f for f in selected_files if f and os.path.isabs(f)]) if has_full_paths else 0
             
+            # Build directory list display
+            directory_controls = []
+            if search_directories:
+                for idx, dir_path in enumerate(search_directories):
+                    directory_controls.append(
+                        ft.Row([
+                            ft.Icon(ft.Icons.FOLDER, size=16, color=colors['secondary_text']),
+                            ft.Text(dir_path, size=11, color=colors['secondary_text'], expand=True),
+                            ft.IconButton(
+                                icon=ft.Icons.CLOSE,
+                                icon_size=16,
+                                tooltip="Remove directory",
+                                on_click=lambda e, i=idx: self.remove_search_directory(e, i)
+                            )
+                        ], spacing=5)
+                    )
+            else:
+                directory_controls.append(
+                    ft.Text("No directories selected", size=11, color=colors['secondary_text'], italic=True)
+                )
+            
             search_content_column = ft.Column([
-                ft.Text(f"Search directory: {search_directory or 'Not selected'}", 
-                       size=12, color=colors['secondary_text'], italic=True),
-                ft.Container(height=10),
-                ft.ElevatedButton(
-                    "Select Search Directory",
-                    icon=ft.Icons.FOLDER_OPEN,
-                    on_click=self.open_search_dir_picker
+                ft.Text("Search directories:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                ft.Container(
+                    content=ft.Column(directory_controls, spacing=0),
+                    padding=5,
+                    border=ft.border.all(1, colors['border']),
+                    border_radius=5
                 ),
+                ft.Container(height=5),
+                ft.Row([
+                    ft.ElevatedButton(
+                        "Add Search Directory",
+                        icon=ft.Icons.CREATE_NEW_FOLDER,
+                        on_click=self.open_search_dir_picker
+                    ),
+                    ft.ElevatedButton(
+                        "Launch Search",
+                        icon=ft.Icons.ROCKET_LAUNCH,
+                        on_click=self.launch_fuzzy_search,
+                        disabled=(len(search_directories) == 0),
+                        bgcolor=ft.Colors.BLUE_700 if len(search_directories) > 0 else None,
+                        color=ft.Colors.WHITE if len(search_directories) > 0 else None
+                    )
+                ], spacing=10),
                 ft.Container(height=10),
-                ft.Text("Selecting a directory will automatically perform fuzzy search and create symbolic links to selected files.",
+                ft.Text("Add one or more directories, then click 'Launch Search' to find matching files.",
                        size=11, color=colors['secondary_text'], italic=True)
             ], spacing=5, alignment=ft.CrossAxisAlignment.START)
             
@@ -1284,7 +1327,7 @@ class CSVSelectorView(FileSelectorView):
             self.page.update( )
 
             # Determine subtitle based on search completion status
-            search_directory = self.page.session.get("search_directory")
+            search_directories = self.page.session.get("search_directories") or []
             
             if has_full_paths and search_completed:
                 # Search completed with matches
@@ -1295,9 +1338,13 @@ class CSVSelectorView(FileSelectorView):
             elif search_completed and not has_full_paths:
                 # Search completed but no matches
                 search_subtitle = "❌ Search completed but no matches found"
-            elif search_directory:
-                # Directory selected but search not yet run
-                search_subtitle = f"Ready to search in: {os.path.basename(search_directory)}"
+            elif search_directories:
+                # Directory(ies) selected but search not yet run
+                dir_count = len(search_directories)
+                if dir_count == 1:
+                    search_subtitle = f"Ready to search in: {os.path.basename(search_directories[0])}"
+                else:
+                    search_subtitle = f"Ready to search in {dir_count} directories"
             else:
                 # Initial state
                 search_subtitle = "Match filenames to actual files"
@@ -1479,6 +1526,7 @@ class CSVSelectorView(FileSelectorView):
         self.page.session.set("csv_unmatched_headings", None)
         self.page.session.set("selected_file_paths", [])
         self.page.session.set("search_directory", None)
+        self.page.session.set("search_directories", [])
         self.page.session.set("original_filename_count", None)
         self.page.session.set("matched_file_count", None)
         self.page.session.set("matched_ratios", None)
@@ -1547,26 +1595,72 @@ class CSVSelectorView(FileSelectorView):
         self.update_csv_display()
     
     def open_search_dir_picker(self, e):
-        """Open directory picker for fuzzy search."""
-        self.search_dir_picker.get_directory_path(
-            dialog_title="Select Directory for Fuzzy Search"
-        )
+        """Open directory picker for fuzzy search, starting from last selected location."""
+        # Get the last selected directory to use as initial directory
+        search_directories = self.page.session.get("search_directories") or []
+        initial_directory = search_directories[-1] if search_directories else None
+        
+        if initial_directory:
+            self.search_dir_picker.get_directory_path(
+                dialog_title="Select Directory for Fuzzy Search (can add multiple)",
+                initial_directory=initial_directory
+            )
+        else:
+            self.search_dir_picker.get_directory_path(
+                dialog_title="Select Directory for Fuzzy Search (can add multiple)"
+            )
+    
+    def remove_search_directory(self, e, index):
+        """Remove a directory from the search directories list."""
+        search_directories = self.page.session.get("search_directories") or []
+        if 0 <= index < len(search_directories):
+            removed_dir = search_directories.pop(index)
+            self.page.session.set("search_directories", search_directories)
+            self.logger.info(f"Removed search directory: {removed_dir}")
+            self.update_csv_display()
     
     def on_search_dir_picker_result(self, e: ft.FilePickerResultEvent):
-        """Handle search directory selection and automatically perform complete workflow."""
+        """Handle search directory selection and add to list."""
         if e.path:
-            self.page.session.set("search_directory", e.path)
-            self.logger.info(f"Selected search directory: {e.path}")
-            self.update_csv_display()
+            search_directories = self.page.session.get("search_directories") or []
             
-            # Automatically perform the complete workflow
-            self.auto_perform_workflow(e.path)
+            # Check if directory already exists in list
+            if e.path not in search_directories:
+                search_directories.append(e.path)
+                self.page.session.set("search_directories", search_directories)
+                self.page.session.set("search_directory", e.path)  # Keep for backward compatibility
+                self.logger.info(f"Added search directory: {e.path}")
+                self.update_csv_display()
+            else:
+                self.logger.info(f"Directory already in list: {e.path}")
+                self.update_csv_display()
     
-    def auto_perform_workflow(self, search_dir):
-        """Automatically perform fuzzy search and link creation."""
+    def launch_fuzzy_search(self, e):
+        """Launch the fuzzy search across all selected directories."""
+        search_directories = self.page.session.get("search_directories") or []
+        
+        if not search_directories:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Please add at least one search directory first"),
+                bgcolor=ft.Colors.ORANGE_700
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        
+        self.logger.info(f"Launching fuzzy search across {len(search_directories)} directories")
+        self.auto_perform_workflow()
+    
+    def auto_perform_workflow(self):
+        """Automatically perform fuzzy search and link creation across all search directories."""
         selected_files = self.page.session.get("selected_file_paths") or []
+        search_directories = self.page.session.get("search_directories") or []
         
         if not selected_files:
+            self.logger.warning("No files available for automatic workflow")
+            return
+        
+        if not search_directories:
             self.logger.warning("No files available for automatic workflow")
             return
         
@@ -1585,11 +1679,11 @@ class CSVSelectorView(FileSelectorView):
         self.page.update()
         
         try:
-            # Step 1: Perform fuzzy search
-            self.logger.info(f"Auto-workflow: Starting fuzzy search for {len(selected_files)} files")
+            # Step 1: Perform fuzzy search across all directories
+            self.logger.info(f"Auto-workflow: Starting fuzzy search for {len(selected_files)} files across {len(search_directories)} directories")
             
             # Call the fuzzy search logic (extracted from do_fuzzy_search)
-            results = self.perform_fuzzy_search_workflow(search_dir, selected_files)
+            results = self.perform_fuzzy_search_workflow(search_directories, selected_files)
             
             if results is None:  # Search was cancelled or failed
                 progress_dialog.open = False
@@ -1645,8 +1739,8 @@ class CSVSelectorView(FileSelectorView):
             self.page.snack_bar.open = True
             self.page.update()
     
-    def perform_fuzzy_search_workflow(self, search_dir, selected_files):
-        """Perform the fuzzy search workflow and return results."""
+    def perform_fuzzy_search_workflow(self, search_dirs, selected_files):
+        """Perform the fuzzy search workflow across multiple directories and return results."""
         try:
             # Define progress callback (simplified for auto mode)
             def update_progress(progress):
@@ -1657,16 +1751,31 @@ class CSVSelectorView(FileSelectorView):
             def check_cancel():
                 return False  # No cancellation in auto mode
             
-            # Perform the fuzzy search
-            results = utils.perform_fuzzy_search_batch(
-                search_dir, 
-                selected_files,
-                threshold=90,
-                progress_callback=update_progress,
-                cancel_check=check_cancel
-            )
+            # Combine results from all directories
+            combined_results = {}
             
-            if results is None:
+            # Search each directory and keep best matches
+            for search_dir in search_dirs:
+                self.logger.info(f"Searching in directory: {search_dir}")
+                
+                # Perform the fuzzy search in this directory
+                results = utils.perform_fuzzy_search_batch(
+                    search_dir, 
+                    selected_files,
+                    threshold=90,
+                    progress_callback=update_progress,
+                    cancel_check=check_cancel
+                )
+                
+                if results is None:
+                    continue
+                
+                # Merge results, keeping best matches
+                for filename, (match_path, ratio) in results.items():
+                    if filename not in combined_results or ratio > combined_results[filename][1]:
+                        combined_results[filename] = (match_path, ratio)
+            
+            if not combined_results:
                 return None
             
             # Process results (same logic as in do_fuzzy_search)
@@ -1678,7 +1787,7 @@ class CSVSelectorView(FileSelectorView):
             original_count = len(selected_files)
             
             for filename in selected_files:
-                match_path, ratio = results.get(filename, (None, 0))
+                match_path, ratio = combined_results.get(filename, (None, 0))
                 if match_path and ratio >= 90:
                     matched_paths.append(match_path)
                     matched_ratios.append(ratio)
@@ -1714,8 +1823,8 @@ class CSVSelectorView(FileSelectorView):
             self.page.session.set("selected_file_paths", [p for p in matched_paths if p is not None])
             self.page.session.set("csv_filenames_for_matched", csv_filenames_for_matched)
             
-            self.logger.info(f"Auto-workflow: Fuzzy search completed. Found {matches_found} matches out of {len(selected_files)} files")
-            return results
+            self.logger.info(f"Auto-workflow: Fuzzy search completed across {len(search_dirs)} directories. Found {matches_found} matches out of {len(selected_files)} files")
+            return combined_results
             
         except Exception as e:
             self.logger.error(f"Error during automatic fuzzy search: {str(e)}")
