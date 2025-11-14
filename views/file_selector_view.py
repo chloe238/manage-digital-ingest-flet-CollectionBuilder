@@ -1616,6 +1616,15 @@ class CSVSelectorView(FileSelectorView):
         if 0 <= index < len(search_directories):
             removed_dir = search_directories.pop(index)
             self.page.session.set("search_directories", search_directories)
+            
+            # If this was the last directory, also clear the old single directory field
+            if not search_directories:
+                self.page.session.set("search_directory", None)
+                # Clear search results when removing all directories
+                self.page.session.set("search_completed", False)
+                self.page.session.set("matched_file_count", None)
+                self.page.session.set("original_filename_count", None)
+            
             self.logger.info(f"Removed search directory: {removed_dir}")
             self.update_csv_display()
     
