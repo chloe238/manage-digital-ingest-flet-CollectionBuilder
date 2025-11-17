@@ -275,9 +275,9 @@ class StorageView(BaseView):
         )
         
         upload_controls = ft.Column(
-                controls=[
-                    ft.Text(
-                        "Azure Storage Upload",
+            controls=[
+                ft.Text(
+                    "Azure Storage Upload",
                         size=18,
                         weight=ft.FontWeight.BOLD,
                         color=colors['primary_text']
@@ -334,11 +334,11 @@ class StorageView(BaseView):
                 spacing=10,
                 horizontal_alignment=ft.CrossAxisAlignment.START
             )
-            
-            return ft.Column(
-                controls=[
-                    *self.create_page_header("Storage", include_log_button=True),
-                    ft.Container(
+        
+        return ft.Column(
+            controls=[
+                *self.create_page_header("Storage", include_log_button=True),
+                ft.Container(
                         content=upload_controls,
                         bgcolor=colors['container_bg'],
                         border=ft.border.all(1, colors['border']),

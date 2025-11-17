@@ -145,8 +145,16 @@ class MDIApplication:
             page.go("/exit")
         
         return ft.AppBar(
-            leading=ft.Icon(ft.Icons.PERM_MEDIA_ROUNDED),
-            leading_width=40,
+            leading=ft.Container(
+                content=ft.Image(
+                    src="assets/cb_icon.png",
+                    width=32,
+                    height=32,
+                    fit=ft.ImageFit.CONTAIN
+                ),
+                padding=ft.padding.only(left=8)
+            ),
+            leading_width=50,
             title=ft.Text("Manage Digital Ingest: CollectionBuilder"),
             center_title=False,
             bgcolor=ft.Colors.BLUE_GREY_100,
@@ -254,6 +262,13 @@ class MDIApplication:
         page.window.min_width = 800
         page.window.height = window_height
         page.window.min_height = 500
+        
+        # Set custom window icon
+        import os
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "cb_icon.png")
+        if os.path.exists(icon_path):
+            page.window.icon = icon_path
+            self.logger.info(f"Set custom window icon: {icon_path}")
         
         # Set theme mode from persistent settings
         if theme_mode == "Dark":
