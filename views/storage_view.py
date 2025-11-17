@@ -36,119 +36,6 @@ class StorageView(BaseView):
             self.logger.error(f"Failed to read Azure base URL: {e}")
             return ""
     
-    def generate_upload_script(self, e):
-        """Generate Alma S3 upload script and display it with copy buttons."""
-        try:
-            # Get the temp directory from session
-            temp_dir = self.page.session.get("temp_directory")
-            if not temp_dir:
-                self.show_snack("No temporary directory found. Please select files first.", is_error=True)
-                return
-            
-            # Get the temp CSV filename from session
-            temp_csv_filename = self.page.session.get("temp_csv_filename")
-            
-            # Generate the script
-            script_content = utils.generate_alma_s3_script(temp_dir, temp_csv_filename)
-            
-            # Save script to temp directory
-            script_path = os.path.join(temp_dir, "upload_to_alma.sh")
-            try:
-                with open(script_path, "w") as f:
-                    f.write(script_content)
-                os.chmod(script_path, 0o755)  # Make executable
-                self.logger.info(f"Generated upload script: {script_path}")
-            except Exception as ex:
-                self.logger.error(f"Failed to save script: {ex}")
-                self.show_snack(f"Failed to save script: {ex}", is_error=True)
-                return
-            
-            # Parse script into commands (lines starting with 'aws')
-            lines = script_content.split('\n')
-            commands = []
-            for line in lines:
-                stripped = line.strip()
-                if stripped.startswith('aws '):
-                    commands.append(stripped)
-            
-            # Create display with copy buttons
-            colors = self.get_theme_colors()
-            
-            command_controls = []
-            for idx, cmd in enumerate(commands, 1):
-                command_controls.append(
-                    ft.Container(
-                        content=ft.Row([
-                            ft.Container(
-                                content=ft.Text(
-                                    cmd,
-                                    size=11,
-                                    font_family="Courier New",
-                                    color=colors['code_text'],
-                                    selectable=True
-                                ),
-                                expand=True,
-                                padding=10,
-                                bgcolor=colors['markdown_bg'],
-                                border_radius=4,
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.COPY,
-                                tooltip=f"Copy command {idx}",
-                                on_click=lambda e, command=cmd: self.copy_to_clipboard(e, command)
-                            )
-                        ], spacing=5),
-                        margin=ft.margin.only(bottom=10)
-                    )
-                )
-            
-            # Create dialog to show the script
-            dialog = ft.AlertDialog(
-                title=ft.Text("Alma S3 Upload Script Generated", weight=ft.FontWeight.BOLD),
-                content=ft.Container(
-                    content=ft.Column([
-                        ft.Text(
-                            f"Script saved to: {script_path}",
-                            size=12,
-                            color=ft.Colors.GREEN_700,
-                            weight=ft.FontWeight.BOLD
-                        ),
-                        ft.Divider(),
-                        ft.Text(
-                            "AWS Commands:",
-                            size=14,
-                            weight=ft.FontWeight.BOLD,
-                            color=colors['primary_text']
-                        ),
-                        ft.Text(
-                            "Click the copy button to copy each command to clipboard",
-                            size=11,
-                            italic=True,
-                            color=colors['secondary_text']
-                        ),
-                        ft.Container(height=10),
-                        ft.Column(
-                            command_controls,
-                            scroll=ft.ScrollMode.AUTO,
-                            height=300
-                        ),
-                    ], spacing=5),
-                    width=700,
-                ),
-                actions=[
-                    ft.TextButton("Close", on_click=lambda e: self.close_dialog(dialog))
-                ],
-                actions_alignment=ft.MainAxisAlignment.END
-            )
-            
-            self.page.overlay.append(dialog)
-            dialog.open = True
-            self.page.update()
-            
-        except Exception as ex:
-            self.logger.error(f"Error generating upload script: {ex}")
-            self.show_snack(f"Error: {ex}", is_error=True)
-    
     def copy_to_clipboard(self, e, text):
         """Copy text to clipboard."""
         self.page.set_clipboard(text)
@@ -374,56 +261,20 @@ class StorageView(BaseView):
         # Get theme-appropriate colors
         colors = self.get_theme_colors()
         
-        # Get selected mode
-        try:
-            with open("_data/persistent.json", "r", encoding="utf-8") as f:
-                persistent_data = json.load(f)
-            selected_mode = persistent_data.get("selected_mode", "Alma")
-        except Exception as e:
-            self.logger.error(f"Failed to read selected mode: {e}")
-            selected_mode = "Alma"
+        # CollectionBuilder mode - show Azure upload controls
+        azure_url = self.get_azure_base_url()
         
-        if selected_mode == "Alma":
-            # For Alma mode, show markdown content only
-            alma_content = utils.read_markdown("_data/alma_storage.md")
-            
-            return ft.Column(
-                controls=[
-                    *self.create_page_header("Storage", include_log_button=True),
-                    # Markdown instructions
-                    ft.Container(
-                        content=ft.Markdown(
-                            alma_content,
-                            selectable=True,
-                            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
-                            on_tap_link=lambda e: self.page.launch_url(e.data),
-                            md_style_sheet=self.get_markdown_style()
-                        ),
-                        bgcolor=colors['container_bg'],
-                        border=ft.border.all(1, colors['border']),
-                        border_radius=8,
-                        padding=20,
-                        margin=ft.margin.only(top=10)
-                    )
-                ],
-                spacing=0,
-                horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+        upload_button = ft.ElevatedButton(
+            text="Upload Files to Azure",
+            icon=ft.Icons.CLOUD_UPLOAD,
+            on_click=self.upload_files_to_azure,
+            style=ft.ButtonStyle(
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.BLUE
             )
-        else:
-            # For Storage and CollectionBuilder modes, show Azure upload controls
-            azure_url = self.get_azure_base_url()
-            
-            upload_button = ft.ElevatedButton(
-                text="Upload Files to Azure",
-                icon=ft.Icons.CLOUD_UPLOAD,
-                on_click=self.upload_files_to_azure,
-                style=ft.ButtonStyle(
-                    color=ft.Colors.WHITE,
-                    bgcolor=ft.Colors.BLUE
-                )
-            )
-            
-            upload_controls = ft.Column(
+        )
+        
+        upload_controls = ft.Column(
                 controls=[
                     ft.Text(
                         "Azure Storage Upload",

@@ -327,34 +327,27 @@ def show_message(page, text, is_error=False):
 # ------------------------------------------------------------
 def validate_csv_headings(csv_file_path, mode):
     """
-    Validate CSV file headings against verified heading files based on mode.
+    Validate CSV file headings against verified heading files for CollectionBuilder.
     
     Args:
         csv_file_path: Path to the CSV file to validate
-        mode: Either 'Alma' or 'CollectionBuilder'
+        mode: 'CollectionBuilder' (Alma no longer supported)
         
     Returns:
         tuple: (is_valid: bool, unmatched_headings: list, error_message: str or None)
-        - is_valid: True if all headings match (for Alma) or if file is valid (for CB)
+        - is_valid: Always True for CollectionBuilder (permissive validation)
         - unmatched_headings: List of headings that don't match verified list
         - error_message: Error message if there was a problem, None otherwise
         
     Notes:
-        - For Alma mode: ALL headings in the CSV must exactly match verified headings.
-          Returns unmatched headings if any are found.
         - For CollectionBuilder mode: CSV headings are checked against verified list,
           but extra headings are allowed (more permissive).
         - Order of headings does not matter, only the names.
     """
     import pandas as pd
     
-    # Determine which verified headings file to use
-    if mode == 'Alma':
-        verified_file = os.path.join("_data", "verified_CSV_headings_for_Alma-D.csv")
-    elif mode == 'CollectionBuilder':
-        verified_file = os.path.join("_data", "verified_CSV_headings_for_GCCB_projects.csv")
-    else:
-        return (False, [], f"Invalid mode '{mode}'. Must be 'Alma' or 'CollectionBuilder'.")
+    # Use CollectionBuilder verified headings file
+    verified_file = os.path.join("_data", "verified_CSV_headings_for_GCCB_projects.csv")
     
     # Check if verified file exists
     if not os.path.exists(verified_file):
@@ -389,99 +382,9 @@ def validate_csv_headings(csv_file_path, mode):
         # Find headings in CSV that are NOT in verified list
         unmatched_headings = list(csv_headings - verified_headings)
         
-        # For Alma mode, be strict - no unmatched headings allowed
-        if mode == 'Alma':
-            if unmatched_headings:
-                return (False, unmatched_headings, None)
-            else:
-                return (True, [], None)
-        
-        # For CollectionBuilder mode, be more permissive - just report unmatched
-        # but don't fail validation (extra headings are OK)
-        elif mode == 'CollectionBuilder':
-            return (True, unmatched_headings, None)
+        # CollectionBuilder mode: be permissive - just report unmatched but don't fail
+        # (extra headings are OK)
+        return (True, unmatched_headings, None)
             
     except Exception as e:
         return (False, [], f"Error validating CSV headings: {str(e)}")
-
-
-def generate_alma_s3_script(temp_directory, temp_csv_filename=None):
-    """
-    Generate a personalized Alma AWS S3 upload script with the temp directory filled in.
-    
-    Args:
-        temp_directory: Path to the temporary directory containing OBJS folder
-        temp_csv_filename: Name of the temporary CSV file to upload (optional)
-        
-    Returns:
-        str: The bash script content with temp_directory replaced
-    """
-    # Default Profile ID for Alma uploads
-    default_profile_id = "6496776180004641"
-    
-    # Determine the CSV file reference for the script
-    if temp_csv_filename:
-        csv_file_path = f"{temp_directory}/{temp_csv_filename}"
-    else:
-        # Fallback to wildcard if filename not provided
-        csv_file_path = f"{temp_directory}/*.csv"
-    
-    script_template = """#!/bin/bash
-
-# Alma AWS S3 Upload Script
-# This script helps upload files from the temporary directory to Alma's AWS S3 storage
-# Profile ID: {profile_id} (default)
-# Replace <import-id> with the value from the Alma Digital Uploader
-
-# Step 1: Print the name and contents of the upload bucket
-echo "Step 1: Listing contents of Alma S3 upload bucket..."
-# List all files in the upload bucket to find your <import-id>
-aws s3 ls s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/ --recursive
-
-echo ""
-echo "Copy/paste the '/<import-id>/' portion from the output above"
-echo "Then edit this script and replace <import-id> in the commands below"
-echo ""
-read -p "Press Enter when ready to continue with the copy commands..."
-
-# Step 2a: Copy temporary CSV file to S3
-# Using Profile ID: {profile_id}
-# Note: values.csv is handled automatically by Alma and should not be uploaded
-echo ""
-echo "Step 2a: Copying temporary CSV file to Alma S3 storage..."
-# Upload the metadata CSV file containing digital object information
-aws s3 cp {csv_file_path} s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/<import-id>/
-
-# Step 2b: Copy OBJS directory to S3
-echo ""
-echo "Step 2b: Copying OBJS directory to Alma S3 storage..."
-# Upload all master/original digital object files from the OBJS directory
-aws s3 cp {temp_directory}/OBJS/ s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/<import-id>/ --recursive
-
-# Step 2c: Copy TN directory to S3
-echo ""
-echo "Step 2c: Copying TN directory to Alma S3 storage..."
-# Upload all thumbnail images from the TN directory
-aws s3 cp {temp_directory}/TN/ s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/<import-id>/ --recursive
-
-# Step 3: Verify the upload
-echo ""
-echo "Step 3: Verifying upload..."
-# List all uploaded files to confirm successful transfer
-aws s3 ls s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/ --recursive
-
-echo ""
-echo "Once verified, return to Alma to complete the import operation"
-echo ""
-echo "Optional: After Alma import is complete, you can clean up the S3 bucket:"
-echo ""
-# Remove all files from the upload bucket after successful import (optional cleanup)
-aws s3 rm s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/ --recursive
-"""
-    
-    # Replace the placeholders
-    return script_template.format(
-        temp_directory=temp_directory, 
-        profile_id=default_profile_id,
-        csv_file_path=csv_file_path
-    )

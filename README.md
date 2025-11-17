@@ -6,18 +6,13 @@ A Flet-based Python application for managing Grinnell College ingest of digital 
 
 ### Running the Application
 
-The easiest way to run the application is using the provided `run.sh` script:
+#### macOS/Linux
+
+Use the provided `run.sh` script:
 
 ```bash
 ./run.sh
 ```
-
-**What it does:**
-1. Checks if a Python virtual environment (`.venv`) exists
-2. Creates the virtual environment if it doesn't exist
-3. Activates the virtual environment
-4. Installs/upgrades required dependencies from `python-requirements.txt`
-5. Launches the Flet application
 
 **First-time setup:**
 ```bash
@@ -25,9 +20,24 @@ chmod +x run.sh  # Make the script executable (only needed once)
 ./run.sh         # Run the application
 ```
 
+#### Windows
+
+Use the provided `run.bat` script:
+
+```cmd
+run.bat
+```
+
+**What the scripts do:**
+1. Check if a Python virtual environment (`.venv`) exists
+2. Create the virtual environment if it doesn't exist
+3. Activate the virtual environment
+4. Install/upgrade required dependencies from `python-requirements.txt`
+5. Launch the Flet application
+
 **Requirements:**
 - Python 3.7 or higher
-- Bash shell (macOS, Linux, or Windows with Git Bash/WSL)
+- macOS, Linux, or Windows
 
 ## 📖 Overview
 
@@ -42,22 +52,27 @@ This CollectionBuilder-specific version of Manage Digital Ingest helps you:
 
 ## 🎯 Key Features for CollectionBuilder
 
-- **CollectionBuilder Workflow Only**: Configured specifically for CollectionBuilder workflows
-- **Fuzzy Filename Matching**: Automatically matches images to CSV metadata entries
+- **CollectionBuilder Workflow**: Configured specifically for CollectionBuilder static sites
+- **Multi-Directory Fuzzy Search**: Search across multiple directories to match images to CSV metadata entries
 - **CB Derivative Generation**: Creates thumbnails (400x400) and small images (800x800)
 - **Collection Selection**: Choose target CollectionBuilder collection
-- **Parent/Child Relationships**: Manages object relationships for CollectionBuilder
+- **Parent/Child Relationships**: Manages compound objects and multiple display templates
 - **Azure Blob Storage**: Upload files to CollectionBuilder Azure storage
 - **Session Preservation**: Save your work and resume later
+- **Compound Object Support**: Properly handles compound_object and multiple display templates
 
 ## 📋 CollectionBuilder Workflow
 
 1. **Settings**: App is pre-configured for CollectionBuilder mode, select target collection
-2. **File Selector**: Load CSV with CB metadata, select and match image files
+2. **File Selector**: 
+   - Load CSV with CB metadata
+   - Add one or more search directories
+   - Launch fuzzy search to match image files
+   - Review matches and create symbolic links
 3. **Create Derivatives**: Generate CB thumbnails (_TN.jpg) and small images (_SMALL.jpg)
-4. **Update CSV**: Apply CollectionBuilder-specific metadata updates (object IDs, parent/child)
+4. **Update CSV**: Apply CollectionBuilder-specific metadata updates
 5. **Azure Storage**: Upload files to Azure Blob storage for your CB collection
-6. **Instructions**: View final workflow instructions
+6. **Instructions**: View deployment script and follow-up instructions
 
 ## 📄 Required CSV Columns for CollectionBuilder
 
@@ -67,14 +82,15 @@ See `_data/verified_CSV_headings_for_GCCB_projects.csv` for the complete list of
 
 The app automatically sets the mode to "CollectionBuilder" - no mode selection needed. Configure:
 - Target CollectionBuilder collection
-- File selection method (FilePicker or CSV)
+- Search directories for fuzzy file matching
 - Azure storage settings
 - Theme (Light/Dark)
 
-## 📚 Documentation
+## 📚 Additional Documentation
 
-- **Parent/Child Changes**: See `PARENT-CHILD-CHANGES.md` for details on parent/child object processing
-- **Development History**: See `HISTORY.md` for feature development timeline
+- **Thumbnail Migration**: See `THUMBNAIL_MIGRATION.md` for details on the ImageMagick to Pillow/PyMuPDF migration
+- **Pillow Quick Start**: See `PILLOW_QUICKSTART.md` for getting started with the new thumbnail system
+- **PyMuPDF vs pdf2image**: See `PYMUPDF_VS_PDF2IMAGE.md` for PDF rendering comparison
 
 ## 🛡️ Subset Processing Safeguard
 
@@ -95,6 +111,15 @@ The Update CSV function uses **smart URL preservation logic** when updating Azur
 - 🔒 The existing URL contains a different filename (not in current batch)
 - 🔒 Files from previous processing runs maintain their URLs
 - 🔒 Non-matching rows keep their existing Azure links intact
+- 🔒 Compound objects (`display_template: compound_object` or `multiple`) are never modified
+
+### Compound Object Protection
+
+Rows with `display_template` set to `compound_object` or `multiple` are **completely skipped** during URL updates because:
+- They have no object content of their own
+- Their `object_location` should remain empty
+- Their `image_small` and `image_thumb` may contain custom representations (e.g., poster images)
+- Child objects provide the actual content
 
 ### Example Scenario
 
@@ -120,6 +145,6 @@ This safeguard ensures you can confidently work with subsets of your collection 
 
 Developed for Grinnell College Libraries to streamline the digital object ingest process for CollectionBuilder static sites.
 
-## 🔗 Related
+## 🔗 Related Repository
 
-For Alma Digital workflows, see the separate **Manage Digital Ingest: Alma Edition** application.
+For Alma Digital workflows, see the **manage-digital-ingest-flet-Alma** repository.

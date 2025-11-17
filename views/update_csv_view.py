@@ -443,82 +443,6 @@ class UpdateCSVView(BaseView):
             self.page.snack_bar.open = True
             self.page.update()
     
-    def append_new_row(self, e):
-        """
-        Append a new row to the CSV with temporary file information.
-        Creates a unique ID and populates specific columns with temp file data.
-        Uses the temp CSV filename that was created by FileSelector.
-        """
-        try:
-            # Get CSV file info from session
-            temp_csv_filename = self.page.session.get("temp_csv_filename") or ""
-            original_csv_path = self.page.session.get("selected_csv_file") or ""
-            
-            if not temp_csv_filename or self.csv_data is None:
-                self.logger.warning("No temp CSV filename or CSV data not loaded")
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("No temporary CSV file data available"),
-                    bgcolor=ft.Colors.ORANGE_600
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                return
-            
-            # Generate unique ID
-            unique_id = utils.generate_unique_id(self.page)
-            
-            # Create new row with all empty values first
-            new_row = {col: '' for col in self.csv_data.columns}
-            
-            # Extract numeric portion for Handle URL (e.g., "dg_1234567890" -> "1234567890")
-            numeric_part = unique_id.split('_')[-1] if '_' in unique_id else unique_id
-            handle_url = f"http://hdl.handle.net/11084/{numeric_part}"
-            
-            # Populate specific columns
-            new_row['originating_system_id'] = unique_id
-            new_row['dc:identifier'] = handle_url  # Use Handle URL format in Alma mode
-            new_row['collection_id'] = '81342586470004641'  # CSV file record gets different collection
-            new_row['dc:type'] = 'Dataset'  # CSV file is a dataset
-            
-            # Use the sanitized temp CSV filename for both dc:title and file_name_1
-            new_row['dc:title'] = temp_csv_filename
-            new_row['file_name_1'] = temp_csv_filename
-            
-            # Append the new row to the DataFrame
-            new_row_df = pd.DataFrame([new_row])
-            self.csv_data = pd.concat([self.csv_data, new_row_df], ignore_index=True)
-            
-            # Also update the original to match (so comparison logic doesn't break)
-            # The new row should be considered as part of the "before" state now
-            self.csv_data_original = pd.concat([self.csv_data_original, new_row_df], ignore_index=True)
-            
-            # Save the updated CSV
-            self.save_csv_data()
-            self.edits_applied = True
-            
-            # Update the data table display
-            if self.data_table:
-                new_table = self.render_data_table()
-                self.data_table.content = new_table.content
-                self.data_table.update()
-            
-            self.logger.info(f"Appended new row with ID: {unique_id}")
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Added new row with ID: {unique_id}"),
-                bgcolor=ft.Colors.GREEN_600
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            
-        except Exception as e:
-            self.logger.error(f"Error appending new row: {e}")
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error: {str(e)}"),
-                bgcolor=ft.Colors.RED_600
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-    
     def render_data_table(self):
         """
         Render the CSV data as before/after comparison tables.
@@ -797,17 +721,9 @@ class UpdateCSVView(BaseView):
                 if not self.load_csv_data(self.temp_csv_path):
                     self.logger.error("Failed to load CSV file")
         
-        # Get current mode to determine column name for updates
-        current_mode = utils.session_get(self.page, "selected_mode", "Alma")
-        
-        # Set the column to update based on mode (no selector needed)
-        if current_mode == "Alma":
-            self.selected_column = "file_name_1"
-            button_text = "Apply Matched Files to file_name_1"
-        else:  # CollectionBuilder
-            # In CollectionBuilder, use the column selected by the user in File Selector
-            self.selected_column = self.page.session.get("selected_csv_column") or "filename"
-            button_text = f"Apply Matched Files to CollectionBuilder URLs"
+        # CollectionBuilder mode: use the column selected by the user in File Selector
+        self.selected_column = self.page.session.get("selected_csv_column") or "filename"
+        button_text = f"Apply Matched Files to CollectionBuilder URLs"
         
         # Build the UI - Status information controls
         status_info_controls = []

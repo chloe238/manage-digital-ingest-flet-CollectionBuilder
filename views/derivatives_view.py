@@ -56,103 +56,57 @@ class DerivativesView(BaseView):
             self.logger.info(f"Directory: {dirname}, Basename: {basename}, Root: {root}, Extension: {ext}")
             self.logger.info(f"Temp base directory: {temp_base_dir}")
             
-            if mode == 'Alma':
-                # Alma mode - create thumbnail with .jpg.clientThumb extension in TN/ directory
+            # CollectionBuilder mode - create thumbnail or small in respective directories
+            if derivative_type == 'thumbnail':
                 tn_dir = os.path.join(temp_base_dir, 'TN')
                 os.makedirs(tn_dir, exist_ok=True)
-                derivative_filename = f"{root}.jpg.clientThumb"
-                derivative_path = os.path.join(tn_dir, derivative_filename)
-                self.logger.info(f"Alma derivative path: {derivative_path}")
-                
-                # Define options for Alma thumbnails
+                derivative_path = os.path.join(tn_dir, f"{root}_TN.jpg")
+                self.logger.info(f"CollectionBuilder thumbnail path: {derivative_path}")
                 options = {
                     'trim': False,
-                    'height': 200,
-                    'width': 200,
+                    'height': 400,
+                    'width': 400,
                     'quality': 85,
                     'type': 'thumbnail'
                 }
-                
-                # Process based on file type
-                if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-                    success = generate_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created Alma thumbnail: {derivative_path}")
-                        return True, derivative_path
-                    else:
-                        error_msg = f"Failed to create Alma thumbnail: {derivative_path}"
-                        self.logger.error(error_msg)
-                        return False, error_msg
-                elif ext.lower() == '.pdf':
-                    success = generate_pdf_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created Alma PDF thumbnail: {derivative_path}")
-                        return True, derivative_path
-                    else:
-                        error_msg = f"Failed to create PDF thumbnail: {derivative_path}"
-                        self.logger.error(error_msg)
-                        return False, error_msg
-                else:
-                    error_msg = f"Unsupported file type for Alma: {ext}"
-                    self.logger.error(error_msg)
-                    return False, error_msg
+            elif derivative_type == 'small':
+                small_dir = os.path.join(temp_base_dir, 'SMALL')
+                os.makedirs(small_dir, exist_ok=True)
+                derivative_path = os.path.join(small_dir, f"{root}_SMALL.jpg")
+                self.logger.info(f"CollectionBuilder small path: {derivative_path}")
+                options = {
+                    'trim': False,
+                    'height': 800,
+                    'width': 800,
+                    'quality': 85,
+                    'type': 'thumbnail'
+                }
+            else:
+                error_msg = f"Unknown derivative type for CollectionBuilder: {derivative_type}"
+                self.logger.error(error_msg)
+                return False, error_msg
             
-            elif mode == 'CollectionBuilder':
-                # CollectionBuilder mode - create thumbnail or small in respective directories
-                if derivative_type == 'thumbnail':
-                    tn_dir = os.path.join(temp_base_dir, 'TN')
-                    os.makedirs(tn_dir, exist_ok=True)
-                    derivative_path = os.path.join(tn_dir, f"{root}_TN.jpg")
-                    self.logger.info(f"CollectionBuilder thumbnail path: {derivative_path}")
-                    options = {
-                        'trim': False,
-                        'height': 400,
-                        'width': 400,
-                        'quality': 85,
-                        'type': 'thumbnail'
-                    }
-                elif derivative_type == 'small':
-                    small_dir = os.path.join(temp_base_dir, 'SMALL')
-                    os.makedirs(small_dir, exist_ok=True)
-                    derivative_path = os.path.join(small_dir, f"{root}_SMALL.jpg")
-                    self.logger.info(f"CollectionBuilder small path: {derivative_path}")
-                    options = {
-                        'trim': False,
-                        'height': 800,
-                        'width': 800,
-                        'quality': 85,
-                        'type': 'thumbnail'
-                    }
+            # Process based on file type
+            if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                success = generate_thumbnail(file_path, derivative_path, options)
+                if success:
+                    self.logger.info(f"Created CollectionBuilder {derivative_type}: {derivative_path}")
+                    return True, derivative_path
                 else:
-                    error_msg = f"Unknown derivative type for CollectionBuilder: {derivative_type}"
+                    error_msg = f"Failed to create CollectionBuilder {derivative_type}: {derivative_path}"
                     self.logger.error(error_msg)
                     return False, error_msg
-                
-                # Process based on file type
-                if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-                    success = generate_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created CollectionBuilder {derivative_type}: {derivative_path}")
-                        return True, derivative_path
-                    else:
-                        error_msg = f"Failed to create CollectionBuilder {derivative_type}: {derivative_path}"
-                        self.logger.error(error_msg)
-                        return False, error_msg
-                elif ext.lower() == '.pdf':
-                    success = generate_pdf_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created CollectionBuilder {derivative_type} from PDF: {derivative_path}")
-                        return True, derivative_path
-                    else:
-                        error_msg = f"Failed to create PDF {derivative_type}: {derivative_path}"
-                        self.logger.error(error_msg)
-                        return False, error_msg
+            elif ext.lower() == '.pdf':
+                success = generate_pdf_thumbnail(file_path, derivative_path, options)
+                if success:
+                    self.logger.info(f"Created CollectionBuilder {derivative_type} from PDF: {derivative_path}")
+                    return True, derivative_path
                 else:
-                    error_msg = f"Unsupported file type for CollectionBuilder: {ext}"
+                    error_msg = f"Failed to create PDF {derivative_type}: {derivative_path}"
                     self.logger.error(error_msg)
                     return False, error_msg
             else:
-                error_msg = f"Unsupported mode: {mode}"
+                error_msg = f"Unsupported file type for CollectionBuilder: {ext}"
                 self.logger.error(error_msg)
                 return False, error_msg
                 
@@ -269,25 +223,6 @@ class DerivativesView(BaseView):
                         if not small_success:
                             self.logger.error(f"Small derivative failed: {small_result}")
                         error_count += 1
-                        
-                elif current_mode == "Alma":
-                    # Create thumbnail only for Alma
-                    thumbnail_success, thumbnail_result = self.create_single_derivative(
-                        file_path, current_mode, 'thumbnail'
-                    )
-                    
-                    if thumbnail_success:
-                        result_text = f"✅ {display_name} - Created thumbnail derivative"
-                        success_count += 1
-                        self.logger.info(f"Successfully created thumbnail for {file_path}")
-                    else:
-                        result_text = f"❌ {display_name} - Failed to create thumbnail"
-                        self.logger.error(f"Thumbnail failed: {thumbnail_result}")
-                        error_count += 1
-                else:
-                    result_text = f"❌ {display_name} - Unsupported mode: {current_mode}"
-                    error_count += 1
-                    self.logger.error(f"Unsupported mode {current_mode} for file {file_path}")
                 
                 # Add result to UI
                 self.log_view.controls.append(

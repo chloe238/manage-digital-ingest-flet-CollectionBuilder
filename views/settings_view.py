@@ -116,9 +116,7 @@ class SettingsView(BaseView):
         colors = self.get_theme_colors()
         
         # Read data from JSON files
-        with open("_data/modes.json", "r", encoding="utf-8") as file:
-            modes_data = json.load(file)
-            mode_options = modes_data.get("options", [])
+        # Note: Mode is hardcoded to CollectionBuilder - no modes.json needed
         
         with open("_data/azure_blobs.json", "r", encoding="utf-8") as file:
             azure_blob_options = json.load(file)
@@ -130,7 +128,6 @@ class SettingsView(BaseView):
         file_selector_options = ["FilePicker", "CSV"]
         
         # Log all available options
-        self.logger.info(f"Available mode options: {mode_options}")
         self.logger.info(f"Available file selector options: {file_selector_options}")
         self.logger.info(f"Available storage options: {azure_blob_options}")
         self.logger.info(f"Available collection options: {cb_collection_options}")
