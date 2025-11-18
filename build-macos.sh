@@ -8,11 +8,28 @@ echo "🔧 Starting macOS build with webview fix..."
 
 # Run flet build up to the point where it creates the Flutter project
 echo "📦 Running flet build (will fail, but that's expected)..."
-.venv/bin/flet build macos --skip-flutter-doctor 2>&1 | tee build-output.log || true
+MAX_RETRIES=3
+RETRY_COUNT=0
 
-# Check if Flutter project was created
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    .venv/bin/flet build macos --skip-flutter-doctor 2>&1 | tee build-output.log || true
+    
+    # Check if Flutter project was created
+    if [ -f "build/flutter/pubspec.yaml" ]; then
+        echo "✅ Flutter project created successfully"
+        break
+    fi
+    
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+        echo "⚠️  Flutter project not created. Retrying in 5 seconds... (Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+        sleep 5
+    fi
+done
+
 if [ ! -f "build/flutter/pubspec.yaml" ]; then
-    echo "❌ Flutter project not created. Flet build failed too early."
+    echo "❌ Flutter project not created after $MAX_RETRIES attempts."
+    echo "This is likely due to GitHub being down. Please try again later."
     exit 1
 fi
 
