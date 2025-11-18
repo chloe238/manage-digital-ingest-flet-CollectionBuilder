@@ -1,0 +1,36 @@
+[project]
+name = "manage-digital-ingest"
+version = "1.0.0"
+description = "Manage Digital Ingest - CollectionBuilder metadata and derivative management tool"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "Digital Grinnell", email = "digital@grinnell.edu" }
+]
+dependencies = [
+    "flet>=0.28.2",
+    "pandas>=2.3.3",
+    "openpyxl>=3.1.5",
+    "Pillow>=11.0.0",
+    "PyMuPDF>=1.24.14",
+    "azure-storage-blob>=12.27.0",
+    "azure-identity>=1.25.1",
+    "python-dotenv>=1.1.1",
+    "fastapi>=0.118.3",
+    "cookiecutter>=2.6.0",
+    "fuzzywuzzy>=0.18.0",
+]
+
+[tool.flet]
+org = "edu.grinnell.digital"
+product = "Manage Digital Ingest"
+company = "Digital Grinnell"
+copyright = "Copyright (C) 2025 Digital Grinnell"
+
+[tool.flet.app]
+path = "."
+module = "app"
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"

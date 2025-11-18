@@ -2,18 +2,25 @@
 
 ## Files Created
 
+### Flet Build Icons (for `flet build` command)
+1. **assets/icon.png** - Default icon for all platforms (256x256)
+2. **assets/icon_macos.png** - macOS-specific icon (256x256)
+3. **assets/icon_windows.png** - Windows PNG icon (256x256)
+4. **assets/icon_windows.ico** - Windows ICO format (~5KB)
+5. **assets/icon_web.png** - Web application icon (256x256)
+
 ### Main Application Icon (MDI Icon)
-1. **assets/mdi_icon.png** - Main app icon (256x256) - CollectionBuilder logo with "MDI" badge
-2. **assets/favicon-256.png** - High quality favicon (256x256)
-3. **assets/favicon-128.png** - Standard favicon (128x128)
-4. **assets/favicon-64.png** - Smaller favicon (64x64)
-5. **assets/favicon-32.png** - Classic favicon (32x32)
-6. **assets/favicon.ico** - Windows ICO format (32x32)
+6. **assets/mdi_icon.png** - Main app icon source (256x256) - CollectionBuilder logo with "MDI" badge
+7. **assets/favicon-256.png** - High quality favicon (256x256)
+8. **assets/favicon-128.png** - Standard favicon (128x128)
+9. **assets/favicon-64.png** - Smaller favicon (64x64)
+10. **assets/favicon-32.png** - Classic favicon (32x32)
+11. **assets/favicon.ico** - Windows ICO format (32x32)
 
 ### Original Files
-7. **assets/cb-logo-original.png** - Original CollectionBuilder logo from website
-8. **assets/cb_icon.svg** - Vector SVG version (512x512) - previous custom icon
-9. **assets/cb_icon.png** - Raster PNG version (512x512) - previous custom icon
+12. **assets/cb-logo-original.png** - Original CollectionBuilder logo from website
+13. **assets/cb_icon.svg** - Vector SVG version (512x512) - previous custom icon
+14. **assets/cb_icon.png** - Raster PNG version (512x512) - previous custom icon
 
 ## Design Elements
 
@@ -26,6 +33,8 @@ The MDI icon features:
   - Positioned in lower right corner for visibility
 
 ## Usage in Application
+
+### During Development (running with `./run.sh` or `flet run`)
 
 The icon is used in two places:
 
@@ -45,6 +54,17 @@ The icon is used in two places:
    ```
    - Appears in the top-left of the application
    - Provides consistent branding
+
+### For Production Builds (using `flet build`)
+
+When building standalone executables with `flet build`, the icon system works differently:
+
+- **icon.png** - Default icon used for all platforms
+- **icon_macos.png** - macOS application icon (appears in Finder, Dock, etc.)
+- **icon_windows.png** / **icon_windows.ico** - Windows executable icon
+- **icon_web.png** - Web application icon
+
+The `flet build` command automatically processes these icons and embeds them into the built application. See **BUILD.md** for complete build instructions.
 
 ## Technical Details
 
