@@ -7,7 +7,9 @@ This document explains how to build standalone executables for the Manage Digita
 - Python 3.9 or higher
 - Virtual environment activated (`.venv`)
 - All dependencies installed from `python-requirements.txt`
-- **For macOS builds**: Xcode Command Line Tools (`xcode-select --install`)
+- **For macOS builds**: Full Xcode application (not just Command Line Tools)
+  - Download from App Store or [developer.apple.com](https://developer.apple.com/download)
+  - See **INSTALL_XCODE.md** for detailed installation instructions
 - **For web builds**: No additional requirements!
 
 ## Icon Configuration
@@ -149,25 +151,41 @@ The current icons are 256x256 PNG files with transparent backgrounds, featuring:
 
 ## Troubleshooting
 
-### Xcode Command Line Tools Error (macOS)
+### Xcode/xcodebuild Error (macOS)
 
-If you see an error like:
+If you see errors like:
 ```
 xcrun: error: unable to find utility "xcodebuild", not a developer tool or in PATH
 ```
-
-This means Xcode Command Line Tools are not properly installed. Fix it with:
-
-```bash
-# Install or reinstall Command Line Tools
-xcode-select --install
-
-# If that doesn't work, reset the path:
-sudo xcode-select --reset
-xcode-select --install
+or
+```
+xcode-select: error: tool 'xcodebuild' requires Xcode
 ```
 
-**Alternative**: Build for web instead, which doesn't require Xcode:
+**Cause**: You have Command Line Tools installed, but not the full Xcode application.
+
+**Solution**: Install full Xcode (not just Command Line Tools):
+
+1. **Install Xcode from App Store** (easiest method):
+   - Open App Store
+   - Search for "Xcode"
+   - Click Install (15GB download, takes 30-60 minutes)
+
+2. **After installation, configure Xcode**:
+   ```bash
+   sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+   sudo xcodebuild -license accept
+   sudo xcodebuild -runFirstLaunch
+   ```
+
+3. **Verify**:
+   ```bash
+   xcodebuild -version
+   ```
+
+See **INSTALL_XCODE.md** for detailed instructions.
+
+**Quick Alternative**: Build for web instead (no Xcode required):
 ```bash
 .venv/bin/flet build web
 ```
