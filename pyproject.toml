@@ -24,6 +24,11 @@ copyright = "Copyright (C) 2025 Digital Grinnell"
 path = "."
 module = "app"
 
+# Exclude packages that cause Android/iOS build issues
+[tool.flet.flutter.dependencies]
+webview_flutter_android = { git = { url = "https://github.com/flutter/packages", path = "packages/webview_flutter/webview_flutter_android", ref = "main" } }
+webview_flutter_wkwebview = { git = { url = "https://github.com/flutter/packages", path = "packages/webview_flutter/webview_flutter_wkwebview", ref = "main" } }
+
 [build-system]
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
