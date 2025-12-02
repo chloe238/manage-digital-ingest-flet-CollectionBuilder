@@ -107,6 +107,9 @@ def perform_fuzzy_search(base_path, target_filename, threshold=90):
     Recursively search for files in base_path and find the best match for target_filename
     using simple string matching.
     
+    Enhanced to handle files without extensions: if the target filename has no extension,
+    an exact match of the basename (without extension) gets a score of 90 or more.
+    
     Args:
         base_path (str): The directory to start searching from
         target_filename (str): The filename to match against
@@ -119,10 +122,23 @@ def perform_fuzzy_search(base_path, target_filename, threshold=90):
         best_match_path = None
         best_match_ratio = 0
         
+        # Check if target filename has an extension
+        target_name, target_ext = os.path.splitext(target_filename)
+        target_has_extension = bool(target_ext)
+        
         for root, dirs, files in os.walk(base_path):
             for filename in files:
                 # Calculate simple string similarity ratio
                 ratio = calculate_string_similarity(filename.lower(), target_filename.lower())
+                
+                # Enhanced logic for files without extensions
+                if not target_has_extension:
+                    # If target has no extension, check for exact basename match
+                    file_name, file_ext = os.path.splitext(filename)
+                    if file_name.lower() == target_name.lower():
+                        # Exact basename match gets high score (90+)
+                        # Give slightly higher score based on extension length to prefer shorter extensions
+                        ratio = max(ratio, 90 + min(10, 10 - len(file_ext)))
                 
                 # Update best match if this ratio is higher
                 if ratio > best_match_ratio:
