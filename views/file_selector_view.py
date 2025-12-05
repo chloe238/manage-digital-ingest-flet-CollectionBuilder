@@ -709,6 +709,7 @@ class CSVSelectorView(FileSelectorView):
     def read_csv_file(self, file_path):
         """
         Read CSV or Excel file and extract column headers.
+        Skips comment rows (rows where first column starts with #).
         
         Returns:
             tuple: (columns: list, error: str)
@@ -741,6 +742,17 @@ class CSVSelectorView(FileSelectorView):
             else:
                 return None, f"Unsupported file format: {file_path}"
             
+            # Filter out comment rows (where first column starts with #)
+            original_row_count = len(df)
+            if len(df.columns) > 0:
+                first_col = df.columns[0]
+                comment_mask = df[first_col].astype(str).str.strip().str.startswith('#')
+                comment_count = comment_mask.sum()
+                
+                if comment_count > 0:
+                    self.logger.info(f"Skipping {comment_count} comment row(s) starting with '#' in CSV file")
+                    df = df[~comment_mask]
+            
             # Get column names
             columns = list(df.columns)
             self.logger.info(f"Found {len(columns)} columns in file: {columns}")
@@ -756,6 +768,7 @@ class CSVSelectorView(FileSelectorView):
     def extract_column_data(self, file_path, column_name):
         """
         Extract data from a specific column in the CSV file.
+        Skips comment rows (rows where first column starts with #).
         
         Returns:
             list: Non-empty values from the column
@@ -789,6 +802,16 @@ class CSVSelectorView(FileSelectorView):
             else:
                 raise ValueError(f"Unsupported file format: {file_ext}")
             
+            # Filter out comment rows (where first column starts with #)
+            if len(df.columns) > 0:
+                first_col = df.columns[0]
+                comment_mask = df[first_col].astype(str).str.strip().str.startswith('#')
+                comment_count = comment_mask.sum()
+                
+                if comment_count > 0:
+                    self.logger.info(f"Skipping {comment_count} comment row(s) starting with '#'")
+                    df = df[~comment_mask]
+            
             # Extract non-empty values from the selected column
             if column_name in df.columns:
                 # Get non-null, non-empty values and convert to strings
@@ -808,6 +831,89 @@ class CSVSelectorView(FileSelectorView):
         except Exception as ex:
             self.logger.error(f"Error extracting data from column '{column_name}': {str(ex)}")
             return []
+    
+    def extract_display_template_info(self, file_path, filename_column):
+        """
+        Extract display_template information for each filename from the CSV.
+        Skips comment rows (rows where first column starts with #).
+        
+        Args:
+            file_path: Path to the CSV file
+            filename_column: Name of the column containing filenames
+            
+        Returns:
+            dict: Mapping of filename to display_template value, e.g. {'file1.jpg': 'image', 'interview.mp3': 'transcript'}
+        """
+        try:
+            import pandas as pd
+            import os
+            
+            file_ext = os.path.splitext(file_path)[1].lower()
+            self.logger.info(f"Reading CSV file to extract display_template info: {file_path}")
+            
+            if file_ext == '.csv':
+                # Try multiple encodings for CSV files
+                encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+                df = None
+                
+                for encoding in encodings:
+                    try:
+                        df = pd.read_csv(file_path, encoding=encoding, dtype=str, keep_default_na=False)
+                        self.logger.info(f"Successfully read CSV with encoding: {encoding}")
+                        break
+                    except (UnicodeDecodeError, UnicodeError):
+                        continue
+                
+                if df is None:
+                    raise ValueError("Could not read CSV file with any standard encoding")
+                    
+            elif file_ext in ['.xlsx', '.xls']:
+                df = pd.read_excel(file_path)
+            else:
+                raise ValueError(f"Unsupported file format: {file_ext}")
+            
+            # Filter out comment rows (where first column starts with #)
+            if len(df.columns) > 0:
+                first_col = df.columns[0]
+                comment_mask = df[first_col].astype(str).str.strip().str.startswith('#')
+                comment_count = comment_mask.sum()
+                
+                if comment_count > 0:
+                    self.logger.info(f"Skipping {comment_count} comment row(s) starting with '#' when extracting display_template info")
+                    df = df[~comment_mask]
+            
+            # Check if both required columns exist
+            if filename_column not in df.columns:
+                self.logger.error(f"Filename column '{filename_column}' not found in CSV")
+                return {}
+            
+            if 'display_template' not in df.columns:
+                self.logger.info("No 'display_template' column found in CSV - returning empty dict")
+                return {}
+            
+            # Build mapping of filename -> display_template
+            transcript_info = {}
+            for _, row in df.iterrows():
+                filename = str(row[filename_column]).strip()
+                display_template = str(row['display_template']).strip()
+                
+                # Only include non-empty filenames
+                if filename:
+                    transcript_info[filename] = display_template
+            
+            # Count how many transcript records we found
+            transcript_count = sum(1 for v in transcript_info.values() if v.lower() == 'transcript')
+            if transcript_count > 0:
+                self.logger.info(f"Found {transcript_count} transcript records in CSV")
+            
+            return transcript_info
+                
+        except ImportError:
+            self.logger.error("Pandas library not available for reading CSV data")
+            return {}
+        except Exception as ex:
+            self.logger.error(f"Error extracting display_template info: {str(ex)}")
+            return {}
     
     def update_csv_display(self):
         """Update the CSV file display with current session data."""
@@ -1525,6 +1631,7 @@ class CSVSelectorView(FileSelectorView):
         self.page.session.set("matched_ratios", None)
         self.page.session.set("unmatched_filenames", None)
         self.page.session.set("search_completed", False)
+        self.page.session.set("transcript_info", None)  # Clear transcript info
         
         if selected_col:
             current_csv_file = self.page.session.get("selected_csv_file")
@@ -1536,6 +1643,14 @@ class CSVSelectorView(FileSelectorView):
                 original_count = len(column_data)
                 self.page.session.set("original_filename_count", original_count)
                 self.logger.info(f"Extracted {len(column_data)} potential filenames")
+                
+                # Also extract display_template information for transcript handling
+                transcript_info = self.extract_display_template_info(current_csv_file, selected_col)
+                self.page.session.set("transcript_info", transcript_info)
+                if transcript_info:
+                    transcript_count = sum(1 for v in transcript_info.values() if v.lower() == 'transcript')
+                    if transcript_count > 0:
+                        self.logger.info(f"Stored display_template info for {len(transcript_info)} records ({transcript_count} transcripts)")
         else:
             self.page.session.set("selected_file_paths", [])
         
@@ -1650,9 +1765,18 @@ class CSVSelectorView(FileSelectorView):
             matched_files = self.page.session.get("selected_file_paths") or []
             full_path_files = [f for f in matched_files if f and os.path.isabs(f) and os.path.exists(f)]
             
+            # Also get transcript CSV files if any
+            transcript_csv_files = self.page.session.get("transcript_csv_files") or []
+            
             if full_path_files:
                 self.logger.info(f"Auto-workflow: Creating symbolic links for {len(full_path_files)} matched files")
                 temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(full_path_files)
+                
+                # Also create links for transcript CSV files
+                if transcript_csv_files:
+                    self.logger.info(f"Auto-workflow: Creating symbolic links for {len(transcript_csv_files)} transcript CSV files")
+                    transcript_temp_files, _, _ = self.copy_files_to_temp_directory(transcript_csv_files)
+                    self.logger.info(f"Created links for {len(transcript_temp_files)} transcript CSV files in {temp_dir}")
                 
                 # Update selected_file_paths to point to temp files so derivatives are created there
                 self.page.session.set("selected_file_paths", temp_files)
@@ -1661,9 +1785,14 @@ class CSVSelectorView(FileSelectorView):
                 progress_dialog.open = False
                 self.page.update()
                 
-                # Show result
+                # Show result with transcript info
+                result_message = f"Found {len(full_path_files)} matches and created links successfully."
+                if transcript_csv_files:
+                    result_message += f" Also created links for {len(transcript_csv_files)} transcript CSV files."
+                result_message += " Use the Derivatives menu to generate thumbnails and other derivatives."
+                
                 self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Found {len(full_path_files)} matches and created links successfully. Use the Derivatives menu to generate thumbnails and other derivatives."),
+                    content=ft.Text(result_message),
                     bgcolor=ft.Colors.GREEN_400
                 )
             else:
@@ -1698,6 +1827,9 @@ class CSVSelectorView(FileSelectorView):
     def perform_fuzzy_search_workflow(self, search_dirs, selected_files):
         """Perform the fuzzy search workflow across multiple directories and return results."""
         try:
+            # Get transcript info from session
+            transcript_info = self.page.session.get("transcript_info") or {}
+            
             # Define progress callback (simplified for auto mode)
             def update_progress(progress):
                 # Could add more detailed progress tracking here if needed
@@ -1709,27 +1841,50 @@ class CSVSelectorView(FileSelectorView):
             
             # Combine results from all directories
             combined_results = {}
+            transcript_csv_files = []  # Track transcript CSV files found
             
             # Search each directory and keep best matches
             for search_dir in search_dirs:
                 self.logger.info(f"Searching in directory: {search_dir}")
                 
-                # Perform the fuzzy search in this directory
+                # Perform the fuzzy search in this directory (with transcript support)
                 results = utils.perform_fuzzy_search_batch(
                     search_dir, 
                     selected_files,
                     threshold=90,
                     progress_callback=update_progress,
-                    cancel_check=check_cancel
+                    cancel_check=check_cancel,
+                    transcript_info=transcript_info  # Pass transcript info
                 )
                 
                 if results is None:
                     continue
                 
                 # Merge results, keeping best matches
-                for filename, (match_path, ratio) in results.items():
-                    if filename not in combined_results or ratio > combined_results[filename][1]:
-                        combined_results[filename] = (match_path, ratio)
+                for filename, result_tuple in results.items():
+                    # Check if this is a transcript result (3-tuple) or normal result (2-tuple)
+                    if len(result_tuple) == 3:
+                        # Transcript result: (media_path, ratio, transcript_csv_path)
+                        match_path, ratio, transcript_csv = result_tuple
+                        
+                        # Store transcript CSV if found
+                        if transcript_csv:
+                            transcript_csv_files.append(transcript_csv)
+                            self.logger.info(f"Found transcript CSV: {transcript_csv}")
+                        
+                        # Update combined results with media file
+                        if filename not in combined_results or ratio > combined_results[filename][1]:
+                            combined_results[filename] = (match_path, ratio)
+                    else:
+                        # Normal result: (match_path, ratio)
+                        match_path, ratio = result_tuple
+                        if filename not in combined_results or ratio > combined_results[filename][1]:
+                            combined_results[filename] = (match_path, ratio)
+            
+            # Store transcript CSV files in session for later use
+            if transcript_csv_files:
+                self.page.session.set("transcript_csv_files", transcript_csv_files)
+                self.logger.info(f"Stored {len(transcript_csv_files)} transcript CSV files for later processing")
             
             if not combined_results:
                 return None
@@ -1766,7 +1921,7 @@ class CSVSelectorView(FileSelectorView):
                     elif ratio < 90:
                         self.logger.warning(f"Auto-workflow: No match found for '{filename}' ({ratio}% match - below 90% threshold)")
                     else:
-                        self.logger.info(f"Auto-workflow: No match found for '{filename}' meeting 90% threshold")
+                        self.logger.info(f"Auto-workflow: No match found for '{filename}' meeting 90% threshold)")
             
             # Store search statistics
             self.page.session.set("original_filename_count", original_count)
@@ -1922,13 +2077,17 @@ class CSVSelectorView(FileSelectorView):
             return cancel if cancel is not None else False
         
         try:
+            # Get transcript info from session
+            transcript_info = self.page.session.get("transcript_info") or {}
+            
             # Perform the fuzzy search with progress tracking and cancellation support
             results = utils.perform_fuzzy_search_batch(
                 search_dir, 
                 selected_files,
                 threshold=90,
                 progress_callback=update_progress,
-                cancel_check=check_cancel
+                cancel_check=check_cancel,
+                transcript_info=transcript_info  # Pass transcript info
             )
             
             # Close progress dialog
@@ -1950,11 +2109,26 @@ class CSVSelectorView(FileSelectorView):
             matched_paths = []
             matched_ratios = []
             unmatched_filenames = []
+            transcript_csv_files = []  # Track transcript CSV files
             matches_found = 0
             original_count = len(selected_files)
             
             for filename in selected_files:
-                match_path, ratio = results.get(filename, (None, 0))
+                result_tuple = results.get(filename, (None, 0))
+                
+                # Check if this is a transcript result (3-tuple) or normal result (2-tuple)
+                if len(result_tuple) == 3:
+                    # Transcript result: (media_path, ratio, transcript_csv_path)
+                    match_path, ratio, transcript_csv = result_tuple
+                    
+                    # Store transcript CSV if found
+                    if transcript_csv:
+                        transcript_csv_files.append(transcript_csv)
+                        self.logger.info(f"Found transcript CSV: {transcript_csv}")
+                else:
+                    # Normal result: (match_path, ratio)
+                    match_path, ratio = result_tuple
+                
                 if match_path and ratio >= 90:
                     # Store the original matched path (don't sanitize here)
                     matched_paths.append(match_path)
@@ -1979,6 +2153,11 @@ class CSVSelectorView(FileSelectorView):
                     else:
                         self.logger.info(f"No match found for '{filename}' meeting 90% threshold")
             
+            # Store transcript CSV files in session for later use
+            if transcript_csv_files:
+                self.page.session.set("transcript_csv_files", transcript_csv_files)
+                self.logger.info(f"Stored {len(transcript_csv_files)} transcript CSV files for later processing")
+            
             # Store search statistics for UI display
             self.page.session.set("original_filename_count", original_count)
             self.page.session.set("matched_file_count", matches_found)
@@ -1990,11 +2169,17 @@ class CSVSelectorView(FileSelectorView):
             self.page.session.set("selected_file_paths", [p for p in matched_paths if p is not None])
             
             # Log completion
-            self.logger.info(f"Fuzzy search completed. Found {matches_found} matches out of {len(selected_files)} files")
+            completion_msg = f"Fuzzy search completed. Found {matches_found} matches out of {len(selected_files)} files"
+            if transcript_csv_files:
+                completion_msg += f" (including {len(transcript_csv_files)} transcript CSV files)"
+            self.logger.info(completion_msg)
             
             # Show success message
+            success_msg = f"Search Complete: Found {matches_found} matches out of {len(selected_files)} files"
+            if transcript_csv_files:
+                success_msg += f" (+ {len(transcript_csv_files)} transcript CSVs)"
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Search Complete: Found {matches_found} matches out of {len(selected_files)} files"),
+                content=ft.Text(success_msg),
                 bgcolor=ft.Colors.GREEN_400
             )
             self.page.snack_bar.open = True
@@ -2021,11 +2206,12 @@ class CSVSelectorView(FileSelectorView):
     def on_copy_csv_matches_to_temp(self, e):
         """Handle creating symbolic links for CSV matched files in temporary directory."""
         matched_files = self.page.session.get("selected_file_paths") or []
+        transcript_csv_files = self.page.session.get("transcript_csv_files") or []
         
         # Filter to only include matched files (absolute paths)
         full_path_files = [f for f in matched_files if f and os.path.isabs(f) and os.path.exists(f)]
         
-        if not full_path_files:
+        if not full_path_files and not transcript_csv_files:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text("No matched files found to link"),
                 bgcolor=ft.Colors.RED_400
@@ -2037,13 +2223,24 @@ class CSVSelectorView(FileSelectorView):
         self.logger.info(f"Creating symbolic links for {len(full_path_files)} matched files in temporary directory...")
         temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(full_path_files)
         
+        # Also create links for transcript CSV files
+        if transcript_csv_files:
+            self.logger.info(f"Creating symbolic links for {len(transcript_csv_files)} transcript CSV files...")
+            transcript_temp_files, _, _ = self.copy_files_to_temp_directory(transcript_csv_files)
+            self.logger.info(f"Created links for {len(transcript_temp_files)} transcript CSV files in {temp_dir}")
+        
         # Update selected_file_paths to point to temp files so derivatives are created there
         if temp_files:
             self.page.session.set("selected_file_paths", temp_files)
         
-        if temp_files:
+        if temp_files or transcript_csv_files:
+            success_msg = f"Successfully created {len(temp_files)} symbolic links for matched files"
+            if transcript_csv_files:
+                success_msg += f" and {len(transcript_csv_files)} transcript CSV files"
+            success_msg += " in temporary directory"
+            
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Successfully created {len(temp_files)} symbolic links for matched files in temporary directory"),
+                content=ft.Text(success_msg),
                 bgcolor=ft.Colors.GREEN_400
             )
             self.page.snack_bar.open = True

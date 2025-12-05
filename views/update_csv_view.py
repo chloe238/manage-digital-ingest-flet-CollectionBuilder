@@ -75,6 +75,7 @@ class UpdateCSVView(BaseView):
     def load_csv_data(self, csv_path):
         """
         Load CSV data into a pandas DataFrame.
+        Skips comment rows (rows where first column starts with #).
         
         Args:
             csv_path: Path to the CSV file
@@ -90,6 +91,19 @@ class UpdateCSVView(BaseView):
                 try:
                     # Read all columns as strings to prevent scientific notation and type conversion
                     self.csv_data = pd.read_csv(csv_path, encoding=encoding, dtype=str, keep_default_na=False)
+                    
+                    # Filter out comment rows (where first column starts with #)
+                    if len(self.csv_data.columns) > 0:
+                        first_col = self.csv_data.columns[0]
+                        comment_mask = self.csv_data[first_col].astype(str).str.strip().str.startswith('#')
+                        comment_count = comment_mask.sum()
+                        
+                        if comment_count > 0:
+                            self.logger.info(f"Skipping {comment_count} comment row(s) starting with '#' in CSV file")
+                            self.csv_data = self.csv_data[~comment_mask]
+                            # Reset index after filtering
+                            self.csv_data = self.csv_data.reset_index(drop=True)
+                    
                     # Store a copy of the original data for comparison
                     self.csv_data_original = self.csv_data.copy()
                     self.csv_path = csv_path

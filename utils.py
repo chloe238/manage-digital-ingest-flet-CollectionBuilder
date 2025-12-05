@@ -158,9 +158,85 @@ def perform_fuzzy_search(base_path, target_filename, threshold=90):
         return (None, 0)
 
 
-def perform_fuzzy_search_batch(base_path, target_filenames, threshold=90, progress_callback=None, cancel_check=None):
+def perform_fuzzy_search_for_transcript(base_path, target_filename, threshold=90):
+    """
+    Enhanced fuzzy search specifically for transcript records.
+    
+    When searching for a transcript record, this function:
+    1. Prioritizes finding media files (audio/video) over CSV files
+    2. Also locates matching transcript .csv files with the same basename
+    
+    Args:
+        base_path (str): The directory to start searching from
+        target_filename (str): The filename to match against
+        threshold (int): The minimum match percentage to consider a match (0-100)
+        
+    Returns:
+        tuple: (media_path, media_ratio, transcript_csv_path) or (None, 0, None) if no match found
+        - media_path: Path to the best matching media file (audio/video)
+        - media_ratio: Match score for the media file
+        - transcript_csv_path: Path to matching transcript .csv file (if found)
+    """
+    try:
+        # Media file extensions to prioritize
+        media_extensions = {'.mp3', '.mp4', '.wav', '.m4a', '.flac', '.ogg', '.webm', '.mov', '.avi', '.mkv'}
+        
+        best_media_path = None
+        best_media_ratio = 0
+        transcript_csv_path = None
+        
+        # Check if target filename has an extension
+        target_name, target_ext = os.path.splitext(target_filename)
+        target_has_extension = bool(target_ext)
+        
+        for root, dirs, files in os.walk(base_path):
+            for filename in files:
+                file_name, file_ext = os.path.splitext(filename)
+                file_ext_lower = file_ext.lower()
+                
+                # Calculate similarity
+                ratio = calculate_string_similarity(filename.lower(), target_filename.lower())
+                
+                # Enhanced logic for files without extensions
+                if not target_has_extension and file_name.lower() == target_name.lower():
+                    # Exact basename match gets high score (90+)
+                    ratio = max(ratio, 90 + min(10, 10 - len(file_ext)))
+                
+                # Check if this is a media file
+                if file_ext_lower in media_extensions:
+                    # Update best media match if this ratio is higher
+                    if ratio > best_media_ratio:
+                        best_media_ratio = ratio
+                        best_media_path = os.path.join(root, filename)
+                        
+                        # If we found a perfect match, we can stop looking for media
+                        if ratio == 100:
+                            # But continue to look for transcript CSV in this directory
+                            pass
+                
+                # Also look for matching transcript CSV files
+                if file_ext_lower == '.csv':
+                    # Check if basename matches (for transcript files)
+                    if not target_has_extension and file_name.lower() == target_name.lower():
+                        transcript_csv_path = os.path.join(root, filename)
+                        logging.info(f"Found matching transcript CSV: {transcript_csv_path}")
+                    elif target_has_extension and file_name.lower() == target_name.lower():
+                        transcript_csv_path = os.path.join(root, filename)
+                        logging.info(f"Found matching transcript CSV: {transcript_csv_path}")
+        
+        return (best_media_path, best_media_ratio, transcript_csv_path)
+            
+    except Exception as e:
+        logging.error(f"Error in transcript fuzzy search: {str(e)}")
+        return (None, 0, None)
+
+
+def perform_fuzzy_search_batch(base_path, target_filenames, threshold=90, progress_callback=None, cancel_check=None, transcript_info=None):
     """
     Perform fuzzy search for multiple filenames sequentially with progress tracking and cancellation support.
+    
+    Enhanced to handle transcript records: when a file is marked as a transcript, it searches for
+    media files (audio/video) and also captures matching transcript .csv files.
     
     Args:
         base_path (str): The directory to start searching from
@@ -168,9 +244,13 @@ def perform_fuzzy_search_batch(base_path, target_filenames, threshold=90, progre
         threshold (int): The minimum fuzzy match ratio to consider a match (0-100)
         progress_callback (callable): Optional callback function to report progress (0.0 to 1.0)
         cancel_check (callable): Optional function that returns True if search should be cancelled
+        transcript_info (dict): Optional dictionary mapping filenames to display_template values
+                                If a filename maps to 'transcript', special transcript search is used
         
     Returns:
-        dict: Dictionary mapping target filenames to (match_path, ratio) tuples, or None if cancelled
+        dict: Dictionary with results. For normal files: {filename: (match_path, ratio)}
+              For transcript files: {filename: (media_path, ratio, transcript_csv_path)}
+              Returns None if cancelled
     """
     results = {}
     total_files = len(target_filenames)
@@ -184,22 +264,44 @@ def perform_fuzzy_search_batch(base_path, target_filenames, threshold=90, progre
         if cancel_check and cancel_check():
             logging.info("Fuzzy search cancelled by user")
             return None
-            
-        logging.info(f"Searching for match to '{filename}' ({index + 1}/{total_files})")
+        
+        # Check if this is a transcript record
+        is_transcript = False
+        if transcript_info and filename in transcript_info:
+            display_template = transcript_info[filename].lower().strip()
+            is_transcript = (display_template == 'transcript')
+        
+        if is_transcript:
+            logging.info(f"Searching for TRANSCRIPT media/CSV for '{filename}' ({index + 1}/{total_files})")
+        else:
+            logging.info(f"Searching for match to '{filename}' ({index + 1}/{total_files})")
         
         # Update progress after each file
         if progress_callback:
             progress = (index + 1) / total_files
             progress_callback(progress)
-            
-        match_path, ratio = perform_fuzzy_search(base_path, filename, threshold)
-        results[filename] = (match_path, ratio)
         
-        # Log the result
-        if match_path and ratio >= threshold:
-            logging.info(f"Found match for '{filename}': {match_path} ({ratio}% match)")
+        # Use appropriate search method
+        if is_transcript:
+            media_path, ratio, transcript_csv = perform_fuzzy_search_for_transcript(base_path, filename, threshold)
+            results[filename] = (media_path, ratio, transcript_csv)
+            
+            # Log the results
+            if media_path and ratio >= threshold:
+                logging.info(f"Found media match for transcript '{filename}': {media_path} ({ratio}% match)")
+                if transcript_csv:
+                    logging.info(f"Also found transcript CSV: {transcript_csv}")
+            else:
+                logging.info(f"No media match found for transcript '{filename}' meeting {threshold}% threshold")
         else:
-            logging.info(f"No match found for '{filename}' meeting {threshold}% threshold")
+            match_path, ratio = perform_fuzzy_search(base_path, filename, threshold)
+            results[filename] = (match_path, ratio)
+            
+            # Log the result
+            if match_path and ratio >= threshold:
+                logging.info(f"Found match for '{filename}': {match_path} ({ratio}% match)")
+            else:
+                logging.info(f"No match found for '{filename}' meeting {threshold}% threshold")
     
     # Only show 100% if we completed the search (not cancelled)
     if progress_callback:
