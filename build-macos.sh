@@ -50,11 +50,11 @@ fi
 
 # Update Flutter dependencies
 echo "📥 Updating Flutter dependencies..."
-/Users/mcfatem/flutter/3.29.2/bin/flutter pub get
+/Users/BestChlo2016/flutter/3.29.2/bin/flutter pub get
 
 # Build the macOS app
 echo "🏗️  Building macOS application..."
-/Users/mcfatem/flutter/3.29.2/bin/flutter build macos
+/Users/BestChlo2016/flutter/3.29.2/bin/flutter build macos
 
 # Copy the built app to the standard location
 echo "📋 Copying built app..."

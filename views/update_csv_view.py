@@ -166,7 +166,7 @@ class UpdateCSVView(BaseView):
                             fixed_value = value.replace('"', "'")
                             self.csv_data.at[idx, col] = fixed_value
                             quote_fixes += 1
-                            self.logger.info(f"Fixed illegal quote in row {idx}, column '{col}': changed {value.count('\"')} double quote(s) to single quote(s)")
+                            # self.logger.info(f"Fixed illegal quote in row {idx}, column '{col}': changed {value.count('\"')} double quote(s) to single quote(s)")
                 
                 if quote_fixes > 0:
                     self.logger.info(f"Fixed {quote_fixes} cell(s) with embedded double quotes")
@@ -470,7 +470,7 @@ class UpdateCSVView(BaseView):
                         
                         if len(children_indices) > 0:
                             # Get the first child
-                            first_child_idx = children_indices[0]
+                            first_child_idx = children_indices[3]
                             
                             # Copy image_small and image_thumb from first child to parent
                             # ONLY if parent's fields are empty
