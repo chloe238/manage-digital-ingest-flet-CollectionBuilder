@@ -80,16 +80,18 @@ class FileSelectorView(BaseView):
     
     def copy_transcript_files_to_temp_directory(self, transcript_paths, temp_dir):
         """
-        Create symbolic links for transcript CSV files in TRANSCRIPTS subdirectory.
+        Check and fix transcript CSV files for proper quoting and UTF-8 encoding.
+        Creates corrected copies in TRANSCRIPTS subdirectory instead of symbolic links.
         
         Args:
-            transcript_paths: List of transcript CSV file paths to link
+            transcript_paths: List of transcript CSV file paths to process
             temp_dir: The temporary directory base path
             
         Returns:
-            list: List of created symbolic link paths in TRANSCRIPTS directory
+            list: List of created/corrected CSV file paths in TRANSCRIPTS directory
         """
         import os
+        import csv
         
         try:
             # Create TRANSCRIPTS subdirectory
@@ -106,26 +108,78 @@ class FileSelectorView(BaseView):
                 
                 # Get the filename
                 filename = os.path.basename(source_path)
-                
-                # Create the destination path in TRANSCRIPTS subdirectory
                 dest_path = os.path.join(transcripts_dir, filename)
                 
-                # Remove existing link/file if present
-                if os.path.exists(dest_path) or os.path.islink(dest_path):
-                    os.remove(dest_path)
-                
-                # Create symbolic link
+                # Check and fix the CSV file
                 try:
-                    os.symlink(source_path, dest_path)
+                    needs_fixing = False
+                    
+                    # Try to read the CSV with different encodings
+                    rows = None
+                    source_encoding = None
+                    for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']:
+                        try:
+                            with open(source_path, 'r', encoding=encoding) as f:
+                                reader = csv.reader(f)
+                                rows = list(reader)
+                                source_encoding = encoding
+                                if encoding != 'utf-8':
+                                    needs_fixing = True
+                                    self.logger.info(f"Transcript {filename} has {encoding} encoding, will convert to UTF-8")
+                                break
+                        except (UnicodeDecodeError, Exception):
+                            continue
+                    
+                    if rows is None:
+                        self.logger.error(f"Could not read transcript CSV {filename} with any encoding")
+                        continue
+                    
+                    # Check for straight apostrophes that need converting
+                    apostrophe_count = 0
+                    fixed_rows = []
+                    for row in rows:
+                        fixed_row = []
+                        for cell in row:
+                            if "'" in cell:
+                                fixed_cell = cell.replace("'", "'")
+                                if fixed_cell != cell:
+                                    apostrophe_count += 1
+                                    needs_fixing = True
+                                fixed_row.append(fixed_cell)
+                            else:
+                                fixed_row.append(cell)
+                        fixed_rows.append(fixed_row)
+                    
+                    if apostrophe_count > 0:
+                        self.logger.info(f"Transcript {filename}: Converting {apostrophe_count} straight apostrophe(s) to curly apostrophes")
+                    
+                    # Write the corrected CSV with UTF-8 and QUOTE_MINIMAL
+                    with open(dest_path, 'w', encoding='utf-8', newline='') as f:
+                        writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+                        writer.writerows(fixed_rows)
+                    
                     transcript_temp_files.append(dest_path)
-                    self.logger.info(f"Created transcript link: {filename}")
-                except Exception as link_error:
-                    self.logger.error(f"Failed to create transcript link for {filename}: {link_error}")
+                    
+                    if needs_fixing:
+                        self.logger.info(f"Fixed and copied transcript: {filename} (was {source_encoding}, now UTF-8 with proper quoting)")
+                    else:
+                        self.logger.info(f"Copied transcript (already correct): {filename}")
+                        
+                except Exception as fix_error:
+                    self.logger.error(f"Failed to process transcript {filename}: {fix_error}")
+                    # Fallback: try to copy the file as-is
+                    try:
+                        import shutil
+                        shutil.copy2(source_path, dest_path)
+                        transcript_temp_files.append(dest_path)
+                        self.logger.warning(f"Copied transcript as-is (could not fix): {filename}")
+                    except Exception as copy_error:
+                        self.logger.error(f"Failed to copy transcript {filename}: {copy_error}")
             
             # Store transcript directory in session
             self.page.session.set("temp_transcripts_directory", transcripts_dir)
             
-            self.logger.info(f"Successfully created {len(transcript_temp_files)} transcript symbolic links in TRANSCRIPTS/ directory")
+            self.logger.info(f"Successfully processed {len(transcript_temp_files)} transcript CSV file(s) in TRANSCRIPTS/ directory")
             return transcript_temp_files
             
         except Exception as e:

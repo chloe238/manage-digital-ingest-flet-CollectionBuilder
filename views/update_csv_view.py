@@ -411,6 +411,21 @@ class UpdateCSVView(BaseView):
                             else:
                                 self.logger.warning("image_thumb column not found in CSV!")
                             
+                            # Update object_transcript column for transcript records
+                            if 'object_transcript' in self.csv_data.columns and 'display_template' in self.csv_data.columns:
+                                display_template = str(self.csv_data.at[row_idx, 'display_template']).strip().lower()
+                                existing_transcript = str(self.csv_data.at[row_idx, 'object_transcript']).strip()
+                                
+                                # Only update if display_template is 'transcript' and object_transcript is empty
+                                if display_template == 'transcript' and (not existing_transcript or existing_transcript == 'nan' or existing_transcript == ''):
+                                    # Generate transcript CSV filename from objectid
+                                    # Format: objectid.csv (e.g., dg_1750784116.csv)
+                                    transcript_csv_filename = f"{csv_filename}.csv"
+                                    self.csv_data.at[row_idx, 'object_transcript'] = transcript_csv_filename
+                                    self.logger.info(f"Updated object_transcript at row {row_idx}: {transcript_csv_filename}")
+                                elif display_template == 'transcript' and existing_transcript:
+                                    self.logger.info(f"Preserved existing object_transcript at row {row_idx}: {existing_transcript}")
+                            
                             self.logger.info(f"Updated CollectionBuilder URLs for: '{csv_filename}'")
                         
                         updates += 1
