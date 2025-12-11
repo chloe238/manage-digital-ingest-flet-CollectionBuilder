@@ -34,6 +34,10 @@ class InstructionsView(BaseView):
             temp_csv_path = self.page.session.get("temp_csv_file") or ""
             temp_csv_filename = self.page.session.get("temp_csv_filename") or ""
             temp_dir = self.page.session.get("temp_directory") or ""
+            original_csv_path = self.page.session.get("selected_csv_file") or ""
+            
+            # Extract original filename from path
+            original_csv_filename = os.path.basename(original_csv_path) if original_csv_path else ""
             
             self.logger.info(f"Session data - temp_csv_path: {temp_csv_path}, temp_csv_filename: {temp_csv_filename}")
             
@@ -47,8 +51,11 @@ class InstructionsView(BaseView):
                 self.show_snack("No temp directory found. Please complete the workflow first.", is_error=True)
                 return
             
+            # Use original filename if available, otherwise use temp filename
+            deployment_csv_filename = original_csv_filename if original_csv_filename else temp_csv_filename
+            
             # Remove .csv extension for metadata key
-            metadata_name = temp_csv_filename.replace(".csv", "")
+            metadata_name = deployment_csv_filename.replace(".csv", "")
             
             # Get transcript CSV files from session
             transcript_csv_files = self.page.session.get("transcript_csv_files") or []
@@ -118,14 +125,25 @@ if [ ! -d "_data" ]; then
     mkdir -p _data
 fi
 
-# Copy the updated CSV file
-echo "Copying CSV file to _data directory..."
+# Copy the updated CSV file with timestamped name (for record-keeping)
+echo "Copying timestamped CSV file to _data directory..."
 cp "{temp_csv_path}" "_data/{temp_csv_filename}"
 
 if [ $? -eq 0 ]; then
-    echo "✓ CSV file copied successfully: _data/{temp_csv_filename}"
+    echo "✓ Timestamped CSV copied: _data/{temp_csv_filename}"
 else
-    echo "✗ Failed to copy CSV file"
+    echo "✗ Failed to copy timestamped CSV file"
+    exit 1
+fi
+
+# Create a copy with the original filename for deployment
+echo "Creating deployment copy with original filename..."
+cp "{temp_csv_path}" "_data/{deployment_csv_filename}"
+
+if [ $? -eq 0 ]; then
+    echo "✓ Deployment CSV created: _data/{deployment_csv_filename}"
+else
+    echo "✗ Failed to create deployment CSV"
     exit 1
 fi{transcript_commands}
 
@@ -291,7 +309,12 @@ echo ""
                             color=colors['primary_text']
                         ),
                         ft.Text(
-                            f"• Copies {temp_csv_filename} to _data/ directory",
+                            f"• Copies {temp_csv_filename} to _data/ (timestamped for record-keeping)",
+                            size=12,
+                            color=colors['secondary_text']
+                        ),
+                        ft.Text(
+                            f"• Creates {deployment_csv_filename} in _data/ (for deployment)",
                             size=12,
                             color=colors['secondary_text']
                         ),
