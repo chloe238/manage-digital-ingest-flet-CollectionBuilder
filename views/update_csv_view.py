@@ -102,14 +102,18 @@ class UpdateCSVView(BaseView):
                         on_bad_lines='warn'  # Warn but continue on bad lines
                     )
                     
-                    # Filter out comment rows (where first column starts with #)
+                    # Store comment rows (where first column starts with #) for later restoration
+                    self.comment_rows = []
                     if len(self.csv_data.columns) > 0:
                         first_col = self.csv_data.columns[0]
                         comment_mask = self.csv_data[first_col].astype(str).str.strip().str.startswith('#')
                         comment_count = comment_mask.sum()
                         
                         if comment_count > 0:
-                            self.logger.info(f"Skipping {comment_count} comment row(s) starting with '#' in CSV file")
+                            # Store comment rows as list of dictionaries
+                            self.comment_rows = self.csv_data[comment_mask].to_dict('records')
+                            self.logger.info(f"Preserved {comment_count} comment row(s) starting with '#'")
+                            # Filter out comments for processing
                             self.csv_data = self.csv_data[~comment_mask]
                             # Reset index after filtering
                             self.csv_data = self.csv_data.reset_index(drop=True)
@@ -186,6 +190,15 @@ class UpdateCSVView(BaseView):
                 
                 if apostrophe_fixes > 0:
                     self.logger.info(f"Converted {apostrophe_fixes} cell(s) with straight apostrophes to curly apostrophes")
+                
+                # Re-insert comment rows at the beginning if they exist
+                if hasattr(self, 'comment_rows') and self.comment_rows:
+                    import pandas as pd
+                    # Create DataFrame from comment rows
+                    comment_df = pd.DataFrame(self.comment_rows)
+                    # Concatenate comment rows at the beginning
+                    self.csv_data = pd.concat([comment_df, self.csv_data], ignore_index=True)
+                    self.logger.info(f"Re-inserted {len(self.comment_rows)} comment row(s) at the beginning")
                 
                 # Save without index and preserve all values as text (no scientific notation)
                 # Use quoting=csv.QUOTE_MINIMAL to only quote when necessary

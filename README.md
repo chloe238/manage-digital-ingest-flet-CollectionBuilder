@@ -71,8 +71,15 @@ This CollectionBuilder-specific version of Manage Digital Ingest helps you:
    - Review matches and create symbolic links
 3. **Create Derivatives**: Generate CB thumbnails (_TN.jpg) and small images (_SMALL.jpg)
 4. **Update CSV**: Apply CollectionBuilder-specific metadata updates
-5. **Azure Storage**: Upload files to Azure Blob storage for your CB collection
-6. **Instructions**: View deployment script and follow-up instructions
+   - Preserves comment rows (lines starting with #)
+   - Populates `object_transcript` column for transcript records
+   - Converts straight apostrophes to curly apostrophes for CSV compatibility
+5. **Azure Storage**: Upload files to Azure Blob storage for your CB collection (excludes transcript CSVs)
+6. **Instructions**: Generate deployment script that:
+   - Copies timestamped CSV to `_data/` for record-keeping
+   - Creates deployment CSV with original filename
+   - Updates `_config.yml` with correct metadata reference
+   - Copies transcript CSV files to `_data/transcripts/`
 
 ## 📄 Required CSV Columns for CollectionBuilder
 
