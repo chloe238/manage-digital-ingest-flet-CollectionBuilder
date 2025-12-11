@@ -58,6 +58,19 @@ This CollectionBuilder-specific version of Manage Digital Ingest helps you:
 - **Collection Selection**: Choose target CollectionBuilder collection
 - **Parent/Child Relationships**: Manages compound objects and multiple display templates
 - **Azure Blob Storage**: Upload files to CollectionBuilder Azure storage
+- **CSV Quality Assurance**: 
+  - Preserves comment rows (lines starting with #)
+  - Converts straight apostrophes to curly apostrophes for CSV parser compatibility
+  - Enforces UTF-8 encoding (no BOM)
+  - Uses QUOTE_MINIMAL quoting strategy
+- **Transcript Workflow**: 
+  - Auto-corrects transcript CSV files (encoding + apostrophes)
+  - Auto-populates `object_transcript` column
+  - Copies corrected transcript CSVs to deployment package
+- **Deployment Strategy**:
+  - Creates timestamped CSV for record-keeping
+  - Creates deployment CSV with original filename
+  - Automatically updates `_config.yml` with correct metadata reference
 - **Session Preservation**: Save your work and resume later
 - **Compound Object Support**: Properly handles compound_object and multiple display templates
 
